@@ -10,12 +10,10 @@
       </p>
     </div>
 
+    <!-- AÇÕES DA SEÇÃO (SEM DUPLICAR NOVO FILME) -->
     <div class="section-actions">
       <a class="btn secondary" href="{{ url_for('index', mode='read') }}">
         Modo leitura
-      </a>
-      <a class="btn primary" href="{{ url_for('new_entry') }}">
-        Novo filme
       </a>
     </div>
   </div>
@@ -26,6 +24,8 @@
       <p class="muted small">
         Comece com um filme que te atravessou.
       </p>
+
+      <!-- AÇÃO CONTEXTUAL (FAZ SENTIDO AQUI) -->
       <a class="btn primary" href="{{ url_for('new_entry') }}">
         Escrever o primeiro
       </a>
