@@ -33,24 +33,57 @@
     </div>
 
     <label style="margin-top:10px;">O que esse filme acendeu em você?</label>
-    <textarea name="reflection" placeholder="Uma cena, um gesto, uma frase, um silêncio… o que te acompanhou depois?"></textarea>
+    <textarea
+      class="input"
+      name="reflection"
+      placeholder="Uma cena, um gesto, uma frase, um silêncio… o que te acompanhou depois?"
+    ></textarea>
 
     <div class="divider"></div>
 
-    <div class="muted" style="margin-bottom:10px;">Três perguntas (se você quiser)</div>
+    <!-- ⭐ NOTA -->
+    <label>Que nota você daria para esse filme?</label>
+    <input
+      class="input"
+      type="number"
+      name="rating"
+      min="1"
+      max="10"
+      step="1"
+      placeholder="De 1 a 10 (se fizer sentido pra você)"
+    >
+
+    <div class="divider"></div>
+
+    <div class="muted" style="margin-bottom:10px;">Algumas perguntas (se você quiser)</div>
 
     <div class="grid">
       <div class="prompt">
-        <div class="muted small">{{ prompts[0] }}</div>
-        <input class="input" name="q1" placeholder="Escreva uma linha, se der vontade">
+        <div class="muted small">Qual cena ficou com você?</div>
+        <input class="input" name="q1" placeholder="Às vezes é só um instante">
       </div>
+
       <div class="prompt">
-        <div class="muted small">{{ prompts[1] }}</div>
+        <div class="muted small">Quem você entendeu — mesmo sem concordar?</div>
         <input class="input" name="q2" placeholder="Uma impressão já basta">
       </div>
+
       <div class="prompt">
-        <div class="muted small">{{ prompts[2] }}</div>
-        <input class="input" name="q3" placeholder="Só se quiser">
+        <div class="muted small">Esse filme te lembrou outra obra?</div>
+        <input
+          class="input"
+          name="q3"
+          placeholder="Um filme, uma música, um livro — ou algo sem nome"
+        >
+      </div>
+
+      <div class="prompt">
+        <div class="muted small">Crítica que você gostou (opcional)</div>
+        <input
+          class="input"
+          name="critique_link"
+          placeholder="Link de vídeo, texto ou podcast"
+        >
       </div>
     </div>
 
@@ -58,9 +91,5 @@
       <button class="btn primary" type="submit">Guardar</button>
       <a class="btn secondary" href="{{ url_for('index') }}">Voltar</a>
     </div>
-
-    <p class="muted small" style="margin-top:10px;">
-      Tudo fica salvo localmente no seu computador.
-    </p>
   </form>
 {% endblock %}
