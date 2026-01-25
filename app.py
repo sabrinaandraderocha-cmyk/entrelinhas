@@ -57,7 +57,7 @@ def init_db():
         )
     """)
 
-    # entries (schema novo)
+    # entries
     cur.execute("""
         CREATE TABLE IF NOT EXISTS entries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,9 +75,16 @@ def init_db():
         )
     """)
 
-    # ✅ MIGRAÇÃO: se banco antigo não tiver user_id, adiciona
+    # ✅ MIGRAÇÕES SEGURAS (não apaga dados)
     if not _has_column(conn, "entries", "user_id"):
         cur.execute("ALTER TABLE entries ADD COLUMN user_id INTEGER")
+
+    # ⭐ NOVO: rating + critique_link
+    if not _has_column(conn, "entries", "rating"):
+        cur.execute("ALTER TABLE entries ADD COLUMN rating INTEGER")
+
+    if not _has_column(conn, "entries", "critique_link"):
+        cur.execute("ALTER TABLE entries ADD COLUMN critique_link TEXT")
 
     # password reset tokens
     cur.execute("""
@@ -101,11 +108,7 @@ def ensure_db_ready():
     Inicializa/migra o banco sob demanda.
     Evita travar o deploy em produção por causa de init_db() no import.
     """
-    try:
-        init_db()
-    except Exception:
-        # Se der erro, deixamos estourar na rota chamadora quando necessário
-        raise
+    init_db()
 
 
 # =========================================================
@@ -211,7 +214,7 @@ def signup():
             (email,)
         ).fetchone()
 
-        # ✅ entradas antigas sem user_id vão para o primeiro usuário criado
+        # entradas antigas sem user_id vão para o primeiro usuário criado
         conn.execute(
             "UPDATE entries SET user_id = ? WHERE user_id IS NULL",
             (user["id"],)
@@ -275,7 +278,6 @@ def forgot_password():
     if request.method == "POST":
         email = (request.form.get("email") or "").strip().lower()
 
-        # não revela se email existe
         generic_msg = "Se esse e-mail estiver cadastrado, vamos enviar um link de redefinição."
 
         conn = get_db()
@@ -296,7 +298,6 @@ def forgot_password():
         conn.commit()
         conn.close()
 
-        # link absoluto (produção via APP_BASE_URL; local via host_url)
         app_base_url = os.getenv("APP_BASE_URL", "").strip()
         if app_base_url:
             reset_link = app_base_url.rstrip("/") + url_for("reset_password", token=token)
@@ -305,7 +306,6 @@ def forgot_password():
 
         sent = send_reset_email(user["email"], reset_link)
 
-        # teste local sem SMTP: mostra link na tela
         if not sent:
             flash("SMTP não configurado. Link de teste gerado abaixo:", "warn")
             return render_template("forgot_password.html", show_link=reset_link)
@@ -382,7 +382,7 @@ def index():
     uid = session["user_id"]
     conn = get_db()
     entries = conn.execute("""
-        SELECT id, title, year, director, keyword, created_at
+        SELECT id, title, year, director, keyword, created_at, rating, critique_link
         FROM entries
         WHERE user_id = ?
         ORDER BY id DESC
@@ -406,6 +406,19 @@ def new_entry():
         q2 = (request.form.get("q2") or "").strip()
         q3 = (request.form.get("q3") or "").strip()
 
+        # ⭐ novos campos
+        rating_raw = (request.form.get("rating") or "").strip()
+        critique_link = (request.form.get("critique_link") or "").strip()
+
+        rating = None
+        if rating_raw:
+            try:
+                rating_int = int(rating_raw)
+                if 1 <= rating_int <= 10:
+                    rating = rating_int
+            except ValueError:
+                rating = None
+
         if not title:
             flash("Coloque pelo menos o título do filme.", "warn")
             return redirect(url_for("new_entry"))
@@ -413,11 +426,13 @@ def new_entry():
         conn = get_db()
         conn.execute("""
             INSERT INTO entries
-            (user_id, title, year, director, keyword, reflection, q1, q2, q3, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (user_id, title, year, director, keyword, reflection, q1, q2, q3, rating, critique_link, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             session["user_id"],
-            title, year, director, keyword, reflection, q1, q2, q3,
+            title, year, director, keyword, reflection,
+            q1, q2, q3,
+            rating, critique_link,
             datetime.now().strftime("%d/%m/%Y %H:%M")
         ))
         conn.commit()
@@ -429,7 +444,7 @@ def new_entry():
     prompts = [
         "Qual cena ficou com você?",
         "Quem você entendeu — mesmo sem concordar?",
-        "Se esse filme tivesse um último plano, qual seria?"
+        "Esse filme te lembrou outra obra?"
     ]
     return render_template("new_entry.html", prompts=prompts)
 
