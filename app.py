@@ -1,5 +1,4 @@
 import os
-import sqlite3
 import secrets
 import smtplib
 from email.message import EmailMessage
@@ -9,29 +8,60 @@ from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from werkzeug.security import generate_password_hash, check_password_hash
 
+# ========= DB driver (Postgres via Neon) =========
+# psycopg2-binary precisa estar no requirements.txt
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except Exception:
+    psycopg2 = None
+    RealDictCursor = None
+
+# ========= SQLite (fallback local) =========
+import sqlite3
+
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DB_PATH = os.path.join(BASE_DIR, "entrelinhas.db")
+SQLITE_PATH = os.path.join(BASE_DIR, "entrelinhas.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()  # Neon no Render
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "change-me-now")
 
 
-# =========================================================
-# DB helpers
-# =========================================================
+def using_postgres() -> bool:
+    return bool(DATABASE_URL)
+
+
+def q(sql: str) -> str:
+    """
+    Escrevemos queries no padrão do Postgres (%s).
+    Se estiver no SQLite local, convertemos %s -> ?.
+    """
+    if using_postgres():
+        return sql
+    return sql.replace("%s", "?")
+
+
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    if using_postgres():
+        if psycopg2 is None:
+            raise RuntimeError("psycopg2 não está instalado. Adicione psycopg2-binary no requirements.txt.")
+        return psycopg2.connect(
+            DATABASE_URL,
+            cursor_factory=RealDictCursor,
+            sslmode="require",
+        )
+    conn = sqlite3.connect(SQLITE_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
-def _has_column(conn, table: str, col: str) -> bool:
+def _has_column_sqlite(conn, table: str, col: str) -> bool:
     cols = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return any(c["name"] == col for c in cols)
 
 
-def _now():
-    # UTC para validade de token consistente
+def _now_utc():
     return datetime.utcnow()
 
 
@@ -47,73 +77,114 @@ def init_db():
     conn = get_db()
     cur = conn.cursor()
 
-    # users
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        )
-    """)
+    if using_postgres():
+        # USERS
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+        """)
 
-    # entries
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            title TEXT NOT NULL,
-            year TEXT,
-            director TEXT,
-            keyword TEXT,
-            reflection TEXT,
-            q1 TEXT,
-            q2 TEXT,
-            q3 TEXT,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )
-    """)
+        # ENTRIES (já inclui rating e critique_link)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS entries (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                title TEXT NOT NULL,
+                year TEXT,
+                director TEXT,
+                keyword TEXT,
+                reflection TEXT,
+                q1 TEXT,
+                q2 TEXT,
+                q3 TEXT,
+                rating INTEGER,
+                critique_link TEXT,
+                created_at TEXT NOT NULL
+            );
+        """)
 
-    # ✅ MIGRAÇÕES SEGURAS (não apaga dados)
-    if not _has_column(conn, "entries", "user_id"):
-        cur.execute("ALTER TABLE entries ADD COLUMN user_id INTEGER")
+        # PASSWORD RESETS
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS password_resets (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                token TEXT UNIQUE NOT NULL,
+                expires_at TEXT NOT NULL,
+                used BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at TEXT NOT NULL
+            );
+        """)
 
-    # ⭐ NOVO: rating + critique_link
-    if not _has_column(conn, "entries", "rating"):
-        cur.execute("ALTER TABLE entries ADD COLUMN rating INTEGER")
+        # Migrações "best effort" caso tabelas tenham sido criadas antes sem colunas novas:
+        # (Postgres suporta IF NOT EXISTS em ADD COLUMN nas versões modernas)
+        try:
+            cur.execute("ALTER TABLE entries ADD COLUMN IF NOT EXISTS rating INTEGER;")
+            cur.execute("ALTER TABLE entries ADD COLUMN IF NOT EXISTS critique_link TEXT;")
+        except Exception:
+            # se não suportar IF NOT EXISTS, ignoramos
+            pass
 
-    if not _has_column(conn, "entries", "critique_link"):
-        cur.execute("ALTER TABLE entries ADD COLUMN critique_link TEXT")
+    else:
+        # SQLITE (local)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
 
-    # password reset tokens
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS password_resets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            token TEXT NOT NULL UNIQUE,
-            expires_at TEXT NOT NULL,
-            used INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )
-    """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                title TEXT NOT NULL,
+                year TEXT,
+                director TEXT,
+                keyword TEXT,
+                reflection TEXT,
+                q1 TEXT,
+                q2 TEXT,
+                q3 TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        """)
+
+        # migrações seguras
+        if not _has_column_sqlite(conn, "entries", "user_id"):
+            cur.execute("ALTER TABLE entries ADD COLUMN user_id INTEGER")
+        if not _has_column_sqlite(conn, "entries", "rating"):
+            cur.execute("ALTER TABLE entries ADD COLUMN rating INTEGER")
+        if not _has_column_sqlite(conn, "entries", "critique_link"):
+            cur.execute("ALTER TABLE entries ADD COLUMN critique_link TEXT")
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS password_resets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token TEXT NOT NULL UNIQUE,
+                expires_at TEXT NOT NULL,
+                used INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        """)
 
     conn.commit()
     conn.close()
 
 
 def ensure_db_ready():
-    """
-    Inicializa/migra o banco sob demanda.
-    Evita travar o deploy em produção por causa de init_db() no import.
-    """
+    # lazy init (não trava deploy)
     init_db()
 
 
-# =========================================================
-# AUTH helpers
-# =========================================================
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
@@ -124,11 +195,6 @@ def login_required(view):
 
 
 def send_reset_email(to_email: str, reset_link: str) -> bool:
-    """
-    Envia e-mail via SMTP (TLS). Se não estiver configurado, retorna False.
-    Variáveis de ambiente esperadas:
-    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM (opcional)
-    """
     smtp_host = os.getenv("SMTP_HOST", "").strip()
     smtp_port = int(os.getenv("SMTP_PORT", "0") or 0)
     smtp_user = os.getenv("SMTP_USER", "").strip()
@@ -157,9 +223,9 @@ def send_reset_email(to_email: str, reset_link: str) -> bool:
     return True
 
 
-# =========================================================
-# Diagnostic routes (Render)
-# =========================================================
+# =========================
+# Diagnostic routes
+# =========================
 @app.route("/_health")
 def health():
     return "OK", 200
@@ -174,9 +240,9 @@ def bootstrap():
         return f"DB ERROR: {e}", 500
 
 
-# =========================================================
-# AUTH routes
-# =========================================================
+# =========================
+# Auth
+# =========================
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     ensure_db_ready()
@@ -198,27 +264,22 @@ def signup():
         pw_hash = generate_password_hash(password)
 
         conn = get_db()
+        cur = conn.cursor()
+
         try:
-            conn.execute(
-                "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
-                (email, pw_hash, datetime.now().strftime("%d/%m/%Y %H:%M")),
-            )
+            cur.execute(q("INSERT INTO users (email, password_hash, created_at) VALUES (%s, %s, %s)"),
+                        (email, pw_hash, datetime.now().strftime("%d/%m/%Y %H:%M")))
             conn.commit()
-        except sqlite3.IntegrityError:
+        except Exception:
             conn.close()
             flash("Esse e-mail já está cadastrado. Entre com sua senha.", "warn")
             return redirect(url_for("login"))
 
-        user = conn.execute(
-            "SELECT id, email FROM users WHERE email = ?",
-            (email,)
-        ).fetchone()
+        cur.execute(q("SELECT id, email FROM users WHERE email = %s"), (email,))
+        user = cur.fetchone()
 
-        # entradas antigas sem user_id vão para o primeiro usuário criado
-        conn.execute(
-            "UPDATE entries SET user_id = ? WHERE user_id IS NULL",
-            (user["id"],)
-        )
+        # adota entradas antigas sem user_id (apenas no SQLite local, mas não faz mal manter)
+        cur.execute(q("UPDATE entries SET user_id = %s WHERE user_id IS NULL"), (user["id"],))
         conn.commit()
         conn.close()
 
@@ -242,10 +303,9 @@ def login():
         password = (request.form.get("password") or "").strip()
 
         conn = get_db()
-        user = conn.execute(
-            "SELECT id, email, password_hash FROM users WHERE email = ?",
-            (email,),
-        ).fetchone()
+        cur = conn.cursor()
+        cur.execute(q("SELECT id, email, password_hash FROM users WHERE email = %s"), (email,))
+        user = cur.fetchone()
         conn.close()
 
         if not user or not check_password_hash(user["password_hash"], password):
@@ -268,20 +328,21 @@ def logout():
     return redirect(url_for("login"))
 
 
-# =========================================================
-# Password reset (auto)
-# =========================================================
+# =========================
+# Password reset
+# =========================
 @app.route("/forgot", methods=["GET", "POST"])
 def forgot_password():
     ensure_db_ready()
 
     if request.method == "POST":
         email = (request.form.get("email") or "").strip().lower()
-
         generic_msg = "Se esse e-mail estiver cadastrado, vamos enviar um link de redefinição."
 
         conn = get_db()
-        user = conn.execute("SELECT id, email FROM users WHERE email = ?", (email,)).fetchone()
+        cur = conn.cursor()
+        cur.execute(q("SELECT id, email FROM users WHERE email = %s"), (email,))
+        user = cur.fetchone()
 
         if not user:
             conn.close()
@@ -289,12 +350,19 @@ def forgot_password():
             return redirect(url_for("login"))
 
         token = secrets.token_urlsafe(32)
-        expires = _now() + timedelta(minutes=30)
+        expires = _now_utc() + timedelta(minutes=30)
 
-        conn.execute("""
-            INSERT INTO password_resets (user_id, token, expires_at, used, created_at)
-            VALUES (?, ?, ?, 0, ?)
-        """, (user["id"], token, _dt_to_str(expires), _dt_to_str(_now())))
+        if using_postgres():
+            cur.execute("""
+                INSERT INTO password_resets (user_id, token, expires_at, used, created_at)
+                VALUES (%s, %s, %s, FALSE, %s)
+            """, (user["id"], token, _dt_to_str(expires), _dt_to_str(_now_utc())))
+        else:
+            cur.execute("""
+                INSERT INTO password_resets (user_id, token, expires_at, used, created_at)
+                VALUES (?, ?, ?, 0, ?)
+            """.replace("%s", "?"), (user["id"], token, _dt_to_str(expires), _dt_to_str(_now_utc())))
+
         conn.commit()
         conn.close()
 
@@ -321,24 +389,28 @@ def reset_password(token: str):
     ensure_db_ready()
 
     conn = get_db()
-    row = conn.execute("""
-        SELECT pr.id, pr.user_id, pr.expires_at, pr.used
-        FROM password_resets pr
-        WHERE pr.token = ?
-    """, (token,)).fetchone()
+    cur = conn.cursor()
+    cur.execute(q("SELECT id, user_id, expires_at, used FROM password_resets WHERE token = %s"), (token,))
+    row = cur.fetchone()
 
     if not row:
         conn.close()
         flash("Link inválido.", "warn")
         return redirect(url_for("login"))
 
-    if row["used"] == 1:
+    used = row["used"]
+    if using_postgres():
+        is_used = bool(used)
+    else:
+        is_used = (used == 1)
+
+    if is_used:
         conn.close()
         flash("Esse link já foi usado.", "warn")
         return redirect(url_for("login"))
 
     expires_at = _str_to_dt(row["expires_at"])
-    if _now() > expires_at:
+    if _now_utc() > expires_at:
         conn.close()
         flash("Esse link expirou. Peça um novo.", "warn")
         return redirect(url_for("forgot_password"))
@@ -359,8 +431,12 @@ def reset_password(token: str):
 
         pw_hash = generate_password_hash(password)
 
-        conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (pw_hash, row["user_id"]))
-        conn.execute("UPDATE password_resets SET used = 1 WHERE id = ?", (row["id"],))
+        cur.execute(q("UPDATE users SET password_hash = %s WHERE id = %s"), (pw_hash, row["user_id"]))
+        if using_postgres():
+            cur.execute(q("UPDATE password_resets SET used = TRUE WHERE id = %s"), (row["id"],))
+        else:
+            cur.execute(q("UPDATE password_resets SET used = 1 WHERE id = %s"), (row["id"],))
+
         conn.commit()
         conn.close()
 
@@ -371,23 +447,30 @@ def reset_password(token: str):
     return render_template("reset_password.html")
 
 
-# =========================================================
-# App routes (protected)
-# =========================================================
+# =========================
+# App
+# =========================
 @app.route("/")
 @login_required
 def index():
     ensure_db_ready()
 
-    uid = session["user_id"]
+    uid = session.get("user_id")
+    if not uid:
+        flash("Sua sessão expirou. Entre novamente.", "warn")
+        return redirect(url_for("login"))
+
     conn = get_db()
-    entries = conn.execute("""
+    cur = conn.cursor()
+    cur.execute(q("""
         SELECT id, title, year, director, keyword, created_at, rating, critique_link
         FROM entries
-        WHERE user_id = ?
+        WHERE user_id = %s
         ORDER BY id DESC
-    """, (uid,)).fetchall()
+    """), (uid,))
+    entries = cur.fetchall()
     conn.close()
+
     return render_template("index.html", entries=entries)
 
 
@@ -397,6 +480,11 @@ def new_entry():
     ensure_db_ready()
 
     if request.method == "POST":
+        uid = session.get("user_id")
+        if not uid:
+            flash("Sua sessão expirou. Entre novamente.", "warn")
+            return redirect(url_for("login"))
+
         title = (request.form.get("title") or "").strip()
         year = (request.form.get("year") or "").strip()
         director = (request.form.get("director") or "").strip()
@@ -406,16 +494,15 @@ def new_entry():
         q2 = (request.form.get("q2") or "").strip()
         q3 = (request.form.get("q3") or "").strip()
 
-        # ⭐ novos campos
         rating_raw = (request.form.get("rating") or "").strip()
         critique_link = (request.form.get("critique_link") or "").strip()
 
         rating = None
         if rating_raw:
             try:
-                rating_int = int(rating_raw)
-                if 1 <= rating_int <= 10:
-                    rating = rating_int
+                ri = int(rating_raw)
+                if 1 <= ri <= 10:
+                    rating = ri
             except ValueError:
                 rating = None
 
@@ -424,12 +511,13 @@ def new_entry():
             return redirect(url_for("new_entry"))
 
         conn = get_db()
-        conn.execute("""
+        cur = conn.cursor()
+        cur.execute(q("""
             INSERT INTO entries
             (user_id, title, year, director, keyword, reflection, q1, q2, q3, rating, critique_link, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            session["user_id"],
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """), (
+            uid,
             title, year, director, keyword, reflection,
             q1, q2, q3,
             rating, critique_link,
@@ -441,12 +529,7 @@ def new_entry():
         flash("Guardado. O que ficou em você agora tem lugar.", "ok")
         return redirect(url_for("index"))
 
-    prompts = [
-        "Qual cena ficou com você?",
-        "Quem você entendeu — mesmo sem concordar?",
-        "Esse filme te lembrou outra obra?"
-    ]
-    return render_template("new_entry.html", prompts=prompts)
+    return render_template("new_entry.html")
 
 
 @app.route("/e/<int:entry_id>")
@@ -454,12 +537,15 @@ def new_entry():
 def view_entry(entry_id):
     ensure_db_ready()
 
-    uid = session["user_id"]
+    uid = session.get("user_id")
+    if not uid:
+        flash("Sua sessão expirou. Entre novamente.", "warn")
+        return redirect(url_for("login"))
+
     conn = get_db()
-    entry = conn.execute(
-        "SELECT * FROM entries WHERE id = ? AND user_id = ?",
-        (entry_id, uid)
-    ).fetchone()
+    cur = conn.cursor()
+    cur.execute(q("SELECT * FROM entries WHERE id = %s AND user_id = %s"), (entry_id, uid))
+    entry = cur.fetchone()
     conn.close()
 
     if not entry:
@@ -474,15 +560,20 @@ def view_entry(entry_id):
 def delete_entry(entry_id):
     ensure_db_ready()
 
-    uid = session["user_id"]
+    uid = session.get("user_id")
+    if not uid:
+        flash("Sua sessão expirou. Entre novamente.", "warn")
+        return redirect(url_for("login"))
+
     conn = get_db()
-    conn.execute("DELETE FROM entries WHERE id = ? AND user_id = ?", (entry_id, uid))
+    cur = conn.cursor()
+    cur.execute(q("DELETE FROM entries WHERE id = %s AND user_id = %s"), (entry_id, uid))
     conn.commit()
     conn.close()
+
     flash("Entrada removida.", "ok")
     return redirect(url_for("index"))
 
 
 if __name__ == "__main__":
-    # Local: ok rodar assim. Em produção (Render): gunicorn app:app
     app.run(debug=True)
