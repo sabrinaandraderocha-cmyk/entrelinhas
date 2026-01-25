@@ -8,21 +8,20 @@ from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# ========= DB driver (Postgres via Neon) =========
-# psycopg2-binary precisa estar no requirements.txt
+# ============ Postgres (Neon) via psycopg v3 ============
 try:
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
+    import psycopg
+    from psycopg.rows import dict_row
 except Exception:
-    psycopg2 = None
-    RealDictCursor = None
+    psycopg = None
+    dict_row = None
 
-# ========= SQLite (fallback local) =========
+# ============ SQLite (fallback local) ============
 import sqlite3
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 SQLITE_PATH = os.path.join(BASE_DIR, "entrelinhas.db")
-DATABASE_URL = os.getenv("DATABASE_URL", "").strip()  # Neon no Render
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "change-me-now")
@@ -34,23 +33,18 @@ def using_postgres() -> bool:
 
 def q(sql: str) -> str:
     """
-    Escrevemos queries no padrão do Postgres (%s).
-    Se estiver no SQLite local, convertemos %s -> ?.
+    Escrevemos SQL com placeholders do Postgres (%s).
+    No SQLite local, convertemos %s -> ?.
     """
-    if using_postgres():
-        return sql
-    return sql.replace("%s", "?")
+    return sql if using_postgres() else sql.replace("%s", "?")
 
 
 def get_db():
     if using_postgres():
-        if psycopg2 is None:
-            raise RuntimeError("psycopg2 não está instalado. Adicione psycopg2-binary no requirements.txt.")
-        return psycopg2.connect(
-            DATABASE_URL,
-            cursor_factory=RealDictCursor,
-            sslmode="require",
-        )
+        if psycopg is None:
+            raise RuntimeError("psycopg não está instalado. Adicione psycopg[binary] no requirements.txt.")
+        # Neon exige SSL. Geralmente a URL já vem com sslmode=require.
+        return psycopg.connect(DATABASE_URL, row_factory=dict_row)
     conn = sqlite3.connect(SQLITE_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -78,7 +72,6 @@ def init_db():
     cur = conn.cursor()
 
     if using_postgres():
-        # USERS
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -88,7 +81,6 @@ def init_db():
             );
         """)
 
-        # ENTRIES (já inclui rating e critique_link)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS entries (
                 id SERIAL PRIMARY KEY,
@@ -107,7 +99,6 @@ def init_db():
             );
         """)
 
-        # PASSWORD RESETS
         cur.execute("""
             CREATE TABLE IF NOT EXISTS password_resets (
                 id SERIAL PRIMARY KEY,
@@ -119,17 +110,14 @@ def init_db():
             );
         """)
 
-        # Migrações "best effort" caso tabelas tenham sido criadas antes sem colunas novas:
-        # (Postgres suporta IF NOT EXISTS em ADD COLUMN nas versões modernas)
+        # Migração leve (caso tabela antiga sem colunas)
         try:
             cur.execute("ALTER TABLE entries ADD COLUMN IF NOT EXISTS rating INTEGER;")
             cur.execute("ALTER TABLE entries ADD COLUMN IF NOT EXISTS critique_link TEXT;")
         except Exception:
-            # se não suportar IF NOT EXISTS, ignoramos
             pass
 
     else:
-        # SQLITE (local)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -156,7 +144,6 @@ def init_db():
             )
         """)
 
-        # migrações seguras
         if not _has_column_sqlite(conn, "entries", "user_id"):
             cur.execute("ALTER TABLE entries ADD COLUMN user_id INTEGER")
         if not _has_column_sqlite(conn, "entries", "rating"):
@@ -181,7 +168,6 @@ def init_db():
 
 
 def ensure_db_ready():
-    # lazy init (não trava deploy)
     init_db()
 
 
@@ -223,9 +209,6 @@ def send_reset_email(to_email: str, reset_link: str) -> bool:
     return True
 
 
-# =========================
-# Diagnostic routes
-# =========================
 @app.route("/_health")
 def health():
     return "OK", 200
@@ -240,9 +223,6 @@ def bootstrap():
         return f"DB ERROR: {e}", 500
 
 
-# =========================
-# Auth
-# =========================
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     ensure_db_ready()
@@ -278,9 +258,13 @@ def signup():
         cur.execute(q("SELECT id, email FROM users WHERE email = %s"), (email,))
         user = cur.fetchone()
 
-        # adota entradas antigas sem user_id (apenas no SQLite local, mas não faz mal manter)
-        cur.execute(q("UPDATE entries SET user_id = %s WHERE user_id IS NULL"), (user["id"],))
-        conn.commit()
+        # adota entradas antigas sem user_id (só afeta SQLite local; no Postgres quase nunca terá)
+        try:
+            cur.execute(q("UPDATE entries SET user_id = %s WHERE user_id IS NULL"), (user["id"],))
+            conn.commit()
+        except Exception:
+            pass
+
         conn.close()
 
         session["user_id"] = user["id"]
@@ -328,9 +312,6 @@ def logout():
     return redirect(url_for("login"))
 
 
-# =========================
-# Password reset
-# =========================
 @app.route("/forgot", methods=["GET", "POST"])
 def forgot_password():
     ensure_db_ready()
@@ -361,16 +342,13 @@ def forgot_password():
             cur.execute("""
                 INSERT INTO password_resets (user_id, token, expires_at, used, created_at)
                 VALUES (?, ?, ?, 0, ?)
-            """.replace("%s", "?"), (user["id"], token, _dt_to_str(expires), _dt_to_str(_now_utc())))
+            """, (user["id"], token, _dt_to_str(expires), _dt_to_str(_now_utc())))
 
         conn.commit()
         conn.close()
 
         app_base_url = os.getenv("APP_BASE_URL", "").strip()
-        if app_base_url:
-            reset_link = app_base_url.rstrip("/") + url_for("reset_password", token=token)
-        else:
-            reset_link = request.host_url.rstrip("/") + url_for("reset_password", token=token)
+        reset_link = (app_base_url.rstrip("/") if app_base_url else request.host_url.rstrip("/")) + url_for("reset_password", token=token)
 
         sent = send_reset_email(user["email"], reset_link)
 
@@ -398,16 +376,16 @@ def reset_password(token: str):
         flash("Link inválido.", "warn")
         return redirect(url_for("login"))
 
-    used = row["used"]
     if using_postgres():
-        is_used = bool(used)
+        if bool(row["used"]):
+            conn.close()
+            flash("Esse link já foi usado.", "warn")
+            return redirect(url_for("login"))
     else:
-        is_used = (used == 1)
-
-    if is_used:
-        conn.close()
-        flash("Esse link já foi usado.", "warn")
-        return redirect(url_for("login"))
+        if row["used"] == 1:
+            conn.close()
+            flash("Esse link já foi usado.", "warn")
+            return redirect(url_for("login"))
 
     expires_at = _str_to_dt(row["expires_at"])
     if _now_utc() > expires_at:
@@ -447,9 +425,6 @@ def reset_password(token: str):
     return render_template("reset_password.html")
 
 
-# =========================
-# App
-# =========================
 @app.route("/")
 @login_required
 def index():
