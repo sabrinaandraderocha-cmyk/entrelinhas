@@ -9,8 +9,9 @@
   </div>
 
   <form class="card form" method="post">
-    <label>E-mail</label>
+    <label for="email">E-mail</label>
     <input
+      id="email"
       class="input"
       type="email"
       name="email"
@@ -19,8 +20,9 @@
       required
     >
 
-    <label style="margin-top:10px;">Senha</label>
+    <label for="password" style="margin-top:10px;">Senha</label>
     <input
+      id="password"
       class="input"
       type="password"
       name="password"
@@ -29,11 +31,13 @@
       required
     >
 
-    <div class="row">
+    <!-- 🔐 AÇÕES -->
+    <div class="row auth-actions">
       <button class="btn primary" type="submit">Entrar</button>
       <a class="btn secondary" href="{{ url_for('signup') }}">Criar conta</a>
     </div>
 
+    <!-- 🔁 ESQUECI A SENHA -->
     <p class="muted small" style="margin-top:14px;">
       <a href="{{ url_for('forgot_password') }}">
         Esqueceu sua senha?
