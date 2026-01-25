@@ -5,31 +5,50 @@
   <div class="section-title">
     <div>
       <h2>Seus Filmes</h2>
-      <p class="muted">Filmes se transformam em memória. E certas memórias nunca nos deixam.</p>
+      <p class="muted">
+        Filmes se transformam em memória. E certas memórias nunca nos deixam.
+      </p>
     </div>
 
     <div class="section-actions">
-      <a class="btn secondary" href="{{ url_for('index', mode='read') }}">Modo leitura</a>
-      <a class="btn primary" href="{{ url_for('new_entry') }}">Novo filme</a>
+      <a class="btn secondary" href="{{ url_for('index', mode='read') }}">
+        Modo leitura
+      </a>
+      <a class="btn primary" href="{{ url_for('new_entry') }}">
+        Novo filme
+      </a>
     </div>
   </div>
 
   {% if not entries %}
     <div class="card">
       <p class="muted">Ainda está vazio por aqui.</p>
-      <p class="muted small">Comece com um filme que te atravessou.</p>
-      <a class="btn primary" href="{{ url_for('new_entry') }}">Escrever o primeiro</a>
+      <p class="muted small">
+        Comece com um filme que te atravessou.
+      </p>
+      <a class="btn primary" href="{{ url_for('new_entry') }}">
+        Escrever o primeiro
+      </a>
     </div>
   {% else %}
     <div class="grid">
       {% for e in entries %}
-        <a class="card entry entry-min" href="{{ url_for('view_entry', entry_id=e['id']) }}">
+        <a
+          class="card entry entry-min"
+          href="{{ url_for('view_entry', entry_id=e['id']) }}"
+        >
           <div class="entry-top">
             <div class="entry-title">
               <span class="film">{{ e['title'] }}</span>
-              {% if e['year'] %}<span class="muted">({{ e['year'] }})</span>{% endif %}
+              {% if e['year'] %}
+                <span class="muted">({{ e['year'] }})</span>
+              {% endif %}
             </div>
-            <div class="muted small">{{ e['created_at'] }}</div>
+
+            <!-- DATA SEM HORA -->
+            <div class="muted small">
+              {{ e['created_at'].split(' ')[0] }}
+            </div>
           </div>
 
           <div class="entry-meta">
@@ -38,11 +57,15 @@
             {% endif %}
 
             {% if e['director'] %}
-              <span class="pill">Direção: {{ e['director'] }}</span>
+              <span class="pill">
+                Direção: {{ e['director'] }}
+              </span>
             {% endif %}
 
             {% if e['rating'] %}
-              <span class="pill">Nota: {{ e['rating'] }}/10</span>
+              <span class="pill">
+                Nota: {{ e['rating'] }}/10
+              </span>
             {% endif %}
 
             {% if e['critique_link'] %}
