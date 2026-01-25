@@ -1,0 +1,23 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none"
+     xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Fundo -->
+  <rect x="24" y="24" width="208" height="208" rx="56" fill="#0E1218"/>
+
+  <!-- Corpo da claquete -->
+  <rect x="64" y="112" width="128" height="68" rx="16"
+        stroke="#6B7FD7" stroke-width="10"/>
+
+  <!-- Tampa aberta -->
+  <path d="M64 112 L182 76"
+        stroke="#6B7FD7"
+        stroke-width="10"
+        stroke-linecap="round"/>
+
+  <!-- Linhas internas (caderno/diário) -->
+  <line x1="86" y1="140" x2="170" y2="140"
+        stroke="#A8B3E6" stroke-width="6" opacity="0.55"/>
+
+  <line x1="86" y1="158" x2="150" y2="158"
+        stroke="#A8B3E6" stroke-width="6" opacity="0.35"/>
+</svg>

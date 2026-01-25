@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Criar conta • Entrelinhas{% endblock %}
+
+{% block content %}
+  <div class="section-title">
+    <div>
+      <h2>Criar conta</h2>
+      <p class="muted">Um lugar só seu — filmes, memória e texto.</p>
+    </div>
+  </div>
+
+  <form class="card form" method="post">
+    <label>E-mail</label>
+    <input class="input" type="email" name="email" placeholder="seuemail@exemplo.com" required>
+
+    <label style="margin-top:10px;">Senha</label>
+    <input class="input" type="password" name="password" placeholder="mínimo 6 caracteres" required>
+
+    <div class="row">
+      <button class="btn primary" type="submit">Criar conta</button>
+      <a class="btn secondary" href="{{ url_for('login') }}">Já tenho conta</a>
+    </div>
+
+    <p class="muted small" style="margin-top:10px;">
+      Ao criar conta, você terá sua biblioteca separada e privada.
+    </p>
+  </form>
+{% endblock %}

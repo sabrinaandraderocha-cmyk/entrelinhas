@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Biblioteca • Entrelinhas{% endblock %}
+
+{% block content %}
+  <div class="section-title">
+    <div>
+      <h2>Sua biblioteca</h2>
+      <p class="muted">Filmes viram memória. Memórias viram texto.</p>
+    </div>
+
+    <div class="section-actions">
+      <a class="btn secondary" href="{{ url_for('index', mode='read') }}">Modo leitura</a>
+      <a class="btn primary" href="{{ url_for('new_entry') }}">Novo filme</a>
+    </div>
+  </div>
+
+  {% if not entries %}
+    <div class="card">
+      <p class="muted">Ainda está vazio por aqui.</p>
+      <p class="muted small">Comece com um filme que te atravessou.</p>
+      <a class="btn primary" href="{{ url_for('new_entry') }}">Escrever o primeiro</a>
+    </div>
+  {% else %}
+    <div class="grid">
+      {% for e in entries %}
+        <a class="card entry entry-min" href="{{ url_for('view_entry', entry_id=e['id']) }}">
+          <div class="entry-top">
+            <div class="entry-title">
+              <span class="film">{{ e['title'] }}</span>
+              {% if e['year'] %}<span class="muted">({{ e['year'] }})</span>{% endif %}
+            </div>
+            <div class="muted small">{{ e['created_at'] }}</div>
+          </div>
+
+          <div class="entry-meta">
+            {% if e['keyword'] %}
+              <span class="pill">{{ e['keyword'] }}</span>
+            {% endif %}
+            {% if e['director'] %}
+              <span class="pill">Direção: {{ e['director'] }}</span>
+            {% endif %}
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}

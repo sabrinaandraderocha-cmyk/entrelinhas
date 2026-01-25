@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Entrar • Entrelinhas{% endblock %}
+
+{% block content %}
+  <div class="section-title">
+    <div>
+      <h2>Entrar</h2>
+      <p class="muted">Volte para o seu caderno.</p>
+    </div>
+  </div>
+
+  <form class="card form" method="post">
+    <label>E-mail</label>
+    <input
+      class="input"
+      type="email"
+      name="email"
+      placeholder="seuemail@exemplo.com"
+      autocomplete="username"
+      required
+    >
+
+    <label style="margin-top:10px;">Senha</label>
+    <input
+      class="input"
+      type="password"
+      name="password"
+      placeholder="••••••••"
+      autocomplete="current-password"
+      required
+    >
+
+    <div class="row">
+      <button class="btn primary" type="submit">Entrar</button>
+      <a class="btn secondary" href="{{ url_for('signup') }}">Criar conta</a>
+    </div>
+
+    <!-- ESQUECI A SENHA -->
+    <p class="muted small" style="margin-top:14px;">
+      <a href="{{ url_for('forgot_password') }}">
+        Esqueceu sua senha?
+      </a>
+    </p>
+  </form>
+{% endblock %}

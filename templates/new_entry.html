@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Novo filme • Entrelinhas{% endblock %}
+
+{% block content %}
+  <div class="section-title">
+    <div>
+      <h2>Novo filme</h2>
+      <p class="muted">Deixa os créditos passarem — e anota o que ficou.</p>
+    </div>
+  </div>
+
+  <form class="card form" method="post">
+    <div class="grid2">
+      <div>
+        <label>Título do filme *</label>
+        <input class="input" name="title" placeholder="Ex: Passagens" required>
+      </div>
+      <div>
+        <label>Ano</label>
+        <input class="input" name="year" placeholder="Ex: 2023">
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div>
+        <label>Direção</label>
+        <input class="input" name="director" placeholder="Ex: Ira Sachs">
+      </div>
+      <div>
+        <label>Uma palavra</label>
+        <input class="input" name="keyword" placeholder="Ex: culpa / desejo / luto">
+      </div>
+    </div>
+
+    <label style="margin-top:10px;">O que esse filme acendeu em você?</label>
+    <textarea name="reflection" placeholder="Uma cena, um gesto, uma frase, um silêncio… o que te acompanhou depois?"></textarea>
+
+    <div class="divider"></div>
+
+    <div class="muted" style="margin-bottom:10px;">Três perguntas (se você quiser)</div>
+
+    <div class="grid">
+      <div class="prompt">
+        <div class="muted small">{{ prompts[0] }}</div>
+        <input class="input" name="q1" placeholder="Escreva uma linha, se der vontade">
+      </div>
+      <div class="prompt">
+        <div class="muted small">{{ prompts[1] }}</div>
+        <input class="input" name="q2" placeholder="Uma impressão já basta">
+      </div>
+      <div class="prompt">
+        <div class="muted small">{{ prompts[2] }}</div>
+        <input class="input" name="q3" placeholder="Só se quiser">
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="btn primary" type="submit">Guardar</button>
+      <a class="btn secondary" href="{{ url_for('index') }}">Voltar</a>
+    </div>
+
+    <p class="muted small" style="margin-top:10px;">
+      Tudo fica salvo localmente no seu computador.
+    </p>
+  </form>
+{% endblock %}

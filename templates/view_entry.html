@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{{ e['title'] }} • Entrelinhas{% endblock %}
+
+{% set is_reading = (request.args.get('mode') == 'read') %}
+
+{% block content %}
+  <div class="section-title">
+    <div>
+      <h2 class="film" style="margin:0;">
+        {{ e['title'] }} {% if e['year'] %}<span class="muted">({{ e['year'] }})</span>{% endif %}
+      </h2>
+      <div class="muted small">{{ e['created_at'] }}</div>
+    </div>
+
+    <div class="section-actions">
+      {% if is_reading %}
+        <a class="btn secondary" href="{{ url_for('view_entry', entry_id=e['id']) }}">Sair do modo leitura</a>
+      {% else %}
+        <a class="btn secondary" href="{{ url_for('view_entry', entry_id=e['id'], mode='read') }}">Modo leitura</a>
+      {% endif %}
+      <a class="btn secondary" href="{{ url_for('index') }}">Voltar</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="entry-meta" style="margin-top:6px;">
+      {% if e['director'] %}
+        <span class="pill">Direção: {{ e['director'] }}</span>
+      {% endif %}
+      {% if e['keyword'] %}
+        <span class="pill">{{ e['keyword'] }}</span>
+      {% endif %}
+    </div>
+
+    <div class="divider"></div>
+
+    {% if e['reflection'] %}
+      <div class="prose">{{ e['reflection'] | e }}</div>
+    {% else %}
+      <div class="muted">Sem texto principal.</div>
+    {% endif %}
+
+    {% if e['q1'] or e['q2'] or e['q3'] %}
+      <div class="divider"></div>
+      <div class="grid">
+        {% if e['q1'] %}
+          <div class="card soft">
+            <div class="muted small">Qual cena ficou com você?</div>
+            <div class="prose">{{ e['q1'] | e }}</div>
+          </div>
+        {% endif %}
+        {% if e['q2'] %}
+          <div class="card soft">
+            <div class="muted small">Quem você entendeu — mesmo sem concordar?</div>
+            <div class="prose">{{ e['q2'] | e }}</div>
+          </div>
+        {% endif %}
+        {% if e['q3'] %}
+          <div class="card soft">
+            <div class="muted small">Se esse filme tivesse um último plano, qual seria?</div>
+            <div class="prose">{{ e['q3'] | e }}</div>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    {% if not is_reading %}
+      <div class="row" style="margin-top:16px;">
+        <a class="btn primary" href="{{ url_for('new_entry') }}">Novo filme</a>
+
+        <form method="post" action="{{ url_for('delete_entry', entry_id=e['id']) }}"
+              onsubmit="return confirm('Remover este filme do seu caderno?');">
+          <button class="btn danger" type="submit">Excluir</button>
+        </form>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

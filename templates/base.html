@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <title>{% block title %}Entrelinhas{% endblock %}</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
+</head>
+
+{% set is_reading = (request.args.get('mode') == 'read') %}
+<body class="{% if is_reading %}reading{% endif %}">
+  <div class="container {% if is_reading %}reading-wrap{% endif %}">
+    <header class="brand">
+      <div class="logo logo-icon"></div>
+
+      <div>
+        <h1>Entrelinhas</h1>
+        <div class="muted">um lugar pra guardar o que o filme deixou</div>
+      </div>
+
+      <div class="brand-actions">
+        {% if session.get("user_id") %}
+          <a class="btn secondary" href="{{ url_for('index') }}">Biblioteca</a>
+          <a class="btn primary" href="{{ url_for('new_entry') }}">Novo filme</a>
+          <a class="btn secondary" href="{{ url_for('logout') }}">Sair</a>
+        {% else %}
+          <a class="btn secondary" href="{{ url_for('login') }}">Entrar</a>
+          <a class="btn primary" href="{{ url_for('signup') }}">Criar conta</a>
+        {% endif %}
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=True) %}
+      {% if messages %}
+        <div class="grid" style="margin: 12px 0 10px;">
+          {% for category, msg in messages %}
+            <div class="card soft">
+              <div class="muted small">{{ msg }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </div>
+
+  {% if request.endpoint != 'new_entry' and not is_reading and session.get("user_id") %}
+    <a class="fab" href="{{ url_for('new_entry') }}" title="Novo filme">+</a>
+  {% endif %}
+</body>
+</html>
