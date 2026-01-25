@@ -36,8 +36,17 @@
             {% if e['keyword'] %}
               <span class="pill">{{ e['keyword'] }}</span>
             {% endif %}
+
             {% if e['director'] %}
               <span class="pill">Direção: {{ e['director'] }}</span>
+            {% endif %}
+
+            {% if e['rating'] %}
+              <span class="pill">Nota: {{ e['rating'] }}/10</span>
+            {% endif %}
+
+            {% if e['critique_link'] %}
+              <span class="pill">Crítica ↗</span>
             {% endif %}
           </div>
         </a>
