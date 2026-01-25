@@ -30,14 +30,6 @@ def _has_column(conn, table: str, col: str) -> bool:
     return any(c["name"] == col for c in cols)
 
 
-def _has_table(conn, table: str) -> bool:
-    row = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-        (table,),
-    ).fetchone()
-    return row is not None
-
-
 def _now():
     # UTC para validade de token consistente
     return datetime.utcnow()
@@ -104,7 +96,16 @@ def init_db():
     conn.close()
 
 
-init_db()
+def ensure_db_ready():
+    """
+    Inicializa/migra o banco sob demanda.
+    Evita travar o deploy em produção por causa de init_db() no import.
+    """
+    try:
+        init_db()
+    except Exception:
+        # Se der erro, deixamos estourar na rota chamadora quando necessário
+        raise
 
 
 # =========================================================
@@ -154,10 +155,29 @@ def send_reset_email(to_email: str, reset_link: str) -> bool:
 
 
 # =========================================================
+# Diagnostic routes (Render)
+# =========================================================
+@app.route("/_health")
+def health():
+    return "OK", 200
+
+
+@app.route("/_bootstrap")
+def bootstrap():
+    try:
+        ensure_db_ready()
+        return "DB OK", 200
+    except Exception as e:
+        return f"DB ERROR: {e}", 500
+
+
+# =========================================================
 # AUTH routes
 # =========================================================
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
+    ensure_db_ready()
+
     if session.get("user_id"):
         return redirect(url_for("index"))
 
@@ -209,6 +229,8 @@ def signup():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    ensure_db_ready()
+
     if session.get("user_id"):
         return redirect(url_for("index"))
 
@@ -248,6 +270,8 @@ def logout():
 # =========================================================
 @app.route("/forgot", methods=["GET", "POST"])
 def forgot_password():
+    ensure_db_ready()
+
     if request.method == "POST":
         email = (request.form.get("email") or "").strip().lower()
 
@@ -294,6 +318,8 @@ def forgot_password():
 
 @app.route("/reset/<token>", methods=["GET", "POST"])
 def reset_password(token: str):
+    ensure_db_ready()
+
     conn = get_db()
     row = conn.execute("""
         SELECT pr.id, pr.user_id, pr.expires_at, pr.used
@@ -351,6 +377,8 @@ def reset_password(token: str):
 @app.route("/")
 @login_required
 def index():
+    ensure_db_ready()
+
     uid = session["user_id"]
     conn = get_db()
     entries = conn.execute("""
@@ -366,6 +394,8 @@ def index():
 @app.route("/new", methods=["GET", "POST"])
 @login_required
 def new_entry():
+    ensure_db_ready()
+
     if request.method == "POST":
         title = (request.form.get("title") or "").strip()
         year = (request.form.get("year") or "").strip()
@@ -407,6 +437,8 @@ def new_entry():
 @app.route("/e/<int:entry_id>")
 @login_required
 def view_entry(entry_id):
+    ensure_db_ready()
+
     uid = session["user_id"]
     conn = get_db()
     entry = conn.execute(
@@ -425,6 +457,8 @@ def view_entry(entry_id):
 @app.route("/delete/<int:entry_id>", methods=["POST"])
 @login_required
 def delete_entry(entry_id):
+    ensure_db_ready()
+
     uid = session["user_id"]
     conn = get_db()
     conn.execute("DELETE FROM entries WHERE id = ? AND user_id = ?", (entry_id, uid))
@@ -435,4 +469,5 @@ def delete_entry(entry_id):
 
 
 if __name__ == "__main__":
+    # Local: ok rodar assim. Em produção (Render): gunicorn app:app
     app.run(debug=True)
