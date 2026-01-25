@@ -46,7 +46,6 @@ body{
   border-bottom: 1px solid rgba(34,42,56,0.7);
 }
 
-/* LOGO LIMPO (SEM FUNDO) */
 .brand .logo{
   width: 36px;
   height: 36px;
@@ -55,7 +54,6 @@ body{
   justify-content:center;
 }
 
-/* ÍCONE SVG REAL */
 .logo-icon{
   width: 36px;
   height: 36px;
@@ -177,6 +175,10 @@ textarea:focus{
   font-weight: 600;
   cursor: pointer;
   transition: transform .08s ease, box-shadow .2s ease, filter .2s ease;
+
+  /* 👇 AJUSTE IMPORTANTE */
+  min-width: 140px;
+  text-align: center;
 }
 
 .btn:hover{ filter: brightness(1.05); }
@@ -200,10 +202,19 @@ textarea:focus{
   color: rgba(239,68,68,0.95);
 }
 
-/* ================= HOME SILENCIOSA ================= */
+/* ================= ROW ================= */
+
+.row{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+  margin-top: 14px;
+}
+
+/* ================= HOME ================= */
 
 .entry{ display:block; }
-
 .entry-min{ padding: 14px; }
 
 .entry-top{
@@ -247,14 +258,6 @@ textarea:focus{
   height: 1px;
   background: rgba(34,42,56,0.9);
   margin: 16px 0;
-}
-
-.row{
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  align-items:center;
-  margin-top: 14px;
 }
 
 .fab{
