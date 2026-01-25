@@ -23,7 +23,7 @@
 
       <div class="brand-actions">
         {% if session.get("user_id") %}
-          <a class="btn secondary" href="{{ url_for('index') }}">Biblioteca</a>
+          <a class="btn secondary" href="{{ url_for('index') }}">Filmes</a>
           <a class="btn primary" href="{{ url_for('new_entry') }}">Novo filme</a>
           <a class="btn secondary" href="{{ url_for('logout') }}">Sair</a>
         {% else %}
