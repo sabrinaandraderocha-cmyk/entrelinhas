@@ -504,7 +504,83 @@ def new_entry():
         flash("Guardado. O que ficou em você agora tem lugar.", "ok")
         return redirect(url_for("index"))
 
-    return render_template("new_entry.html")
+    # Renderiza o form vazio
+    return render_template("new_entry.html", entry=None, editing=False)
+
+
+# ====== NOVA ROTA DE EDIÇÃO ======
+@app.route("/edit/<int:entry_id>", methods=["GET", "POST"])
+@login_required
+def edit_entry(entry_id):
+    ensure_db_ready()
+    uid = session.get("user_id")
+    if not uid:
+        flash("Sua sessão expirou.", "warn")
+        return redirect(url_for("login"))
+    
+    conn = get_db()
+    cur = conn.cursor()
+    
+    # 1. Busca filme existente para confirmar que é do usuário
+    cur.execute(q("SELECT * FROM entries WHERE id = %s AND user_id = %s"), (entry_id, uid))
+    entry = cur.fetchone()
+    
+    if not entry:
+        conn.close()
+        flash("Filme não encontrado ou você não tem permissão.", "warn")
+        return redirect(url_for("index"))
+
+    # 2. Se for POST, atualiza os dados
+    if request.method == "POST":
+        title = (request.form.get("title") or "").strip()
+        year = (request.form.get("year") or "").strip()
+        director = (request.form.get("director") or "").strip()
+        keyword = (request.form.get("keyword") or "").strip()
+        reflection = (request.form.get("reflection") or "").strip()
+        q1 = (request.form.get("q1") or "").strip()
+        q2 = (request.form.get("q2") or "").strip()
+        q3 = (request.form.get("q3") or "").strip()
+        critique_link = (request.form.get("critique_link") or "").strip()
+        
+        rating_raw = (request.form.get("rating") or "").strip()
+        rating = None
+        if rating_raw:
+            try:
+                ri = int(rating_raw)
+                if 1 <= ri <= 10:
+                    rating = ri
+            except ValueError:
+                rating = None
+
+        if not title:
+            conn.close()
+            flash("O título é obrigatório.", "warn")
+            return redirect(url_for("edit_entry", entry_id=entry_id))
+
+        try:
+            # SQL Update seguro
+            cur.execute(q("""
+                UPDATE entries 
+                SET title=%s, year=%s, director=%s, keyword=%s, 
+                    reflection=%s, q1=%s, q2=%s, q3=%s, rating=%s, critique_link=%s
+                WHERE id=%s AND user_id=%s
+            """), (
+                title, year, director, keyword, reflection, 
+                q1, q2, q3, rating, critique_link, 
+                entry_id, uid
+            ))
+            conn.commit()
+            flash("Filme atualizado com sucesso.", "ok")
+            return redirect(url_for("view_entry", entry_id=entry_id))
+        except Exception as e:
+            flash(f"Erro ao salvar: {e}", "warn")
+        finally:
+            conn.close()
+            
+    conn.close()
+    
+    # 3. Se for GET, renderiza o template 'new_entry' mas com os dados preenchidos
+    return render_template("new_entry.html", entry=entry, editing=True)
 
 
 @app.route("/e/<int:entry_id>")
