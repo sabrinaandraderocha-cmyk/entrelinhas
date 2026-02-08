@@ -1,86 +1,97 @@
 {% extends "base.html" %}
-{% block title %}Novo filme • Entrelinhas{% endblock %}
+
+{% block title %}{{ e.title }} • Entrelinhas{% endblock %}
 
 {% block content %}
-  <div class="section-title">
-    <div>
-      <h2>Novo filme</h2>
-      <p class="muted">Deixa os créditos passarem — e anota o que ficou.</p>
+
+<div class="reading-wrap">
+  <div class="entry-header">
+    <div class="entry-title">
+      <h1 class="film" style="font-size: 38px; margin: 0 0 10px 0;">{{ e.title }}</h1>
+      
+      <div class="muted" style="font-family: 'Playfair Display', serif; font-style: italic; font-size: 18px;">
+        {% if e.year %}{{ e.year }}{% endif %}
+        {% if e.year and e.director %} • {% endif %}
+        {% if e.director %}{{ e.director }}{% endif %}
+      </div>
     </div>
+
+    {% if e.rating %}
+    <div class="pill" style="margin-top: 15px; border-color: var(--accent);">
+      ★ {{ e.rating }}/10
+    </div>
+    {% endif %}
+
+    {% if e.keyword %}
+    <div class="pill" style="margin-top: 15px;">
+      {{ e.keyword }}
+    </div>
+    {% endif %}
   </div>
 
-  <form class="card form" method="post">
-    <div class="grid2">
-      <div>
-        <label>Título do filme *</label>
-        <input class="input" name="title" placeholder="Ex: Passagens" required>
-      </div>
-      <div>
-        <label>Ano</label>
-        <input class="input" name="year" placeholder="Ex: 2023">
-      </div>
-    </div>
+  <div class="prose">
+    {% if e.reflection %}
+      {{ e.reflection|replace('\n', '<br>')|safe }}
+    {% else %}
+      <p class="muted" style="font-style: italic;">Sem anotações principais.</p>
+    {% endif %}
+  </div>
 
-    <div class="grid2">
-      <div>
-        <label>Direção</label>
-        <input class="input" name="director" placeholder="Ex: Ira Sachs">
-      </div>
-      <div>
-        <label>Uma palavra</label>
-        <input class="input" name="keyword" placeholder="Ex: culpa / desejo / luto">
-      </div>
-    </div>
-
-    <label style="margin-top:10px;">O que esse filme acendeu em você?</label>
-    <textarea
-      class="input"
-      name="reflection"
-      placeholder="Uma cena, um gesto, uma frase, um silêncio… o que te acompanhou depois?"
-    ></textarea>
-
-    <div class="divider"></div>
-
-    <label>Que nota você daria para esse filme?</label>
-    <input
-      class="input"
-      type="number"
-      name="rating"
-      min="1"
-      max="10"
-      step="1"
-      placeholder="De 1 a 10 (se fizer sentido pra você)"
-    >
-
-    <div class="divider"></div>
-
-    <div class="muted" style="margin-bottom:10px;">Algumas perguntas (se você quiser)</div>
-
-    <div class="grid">
+  {% if e.q1 or e.q2 or e.q3 or e.critique_link %}
+    <div style="margin-top: 40px;">
+      
+      {% if e.q1 %}
       <div class="prompt">
-        <div class="muted small">Qual cena ficou com você?</div>
-        <input class="input" name="q1" placeholder="Às vezes é só um instante">
+        <strong>A cena que ficou:</strong>
+        <p style="margin-top: 5px;">{{ e.q1 }}</p>
       </div>
+      {% endif %}
 
+      {% if e.q2 %}
       <div class="prompt">
-        <div class="muted small">Qual personagem te pareceu mais interessante — e por quê?</div>
-        <input class="input" name="q2" placeholder="Às vezes é um detalhe, não o arco inteiro">
+        <strong>O personagem:</strong>
+        <p style="margin-top: 5px;">{{ e.q2 }}</p>
       </div>
+      {% endif %}
 
+      {% if e.q3 %}
       <div class="prompt">
-        <div class="muted small">Esse filme te lembrou outra obra?</div>
-        <input class="input" name="q3" placeholder="Um filme, uma música, um livro — ou algo sem nome">
+        <strong>Lembrou de:</strong>
+        <p style="margin-top: 5px;">{{ e.q3 }}</p>
       </div>
+      {% endif %}
 
+      {% if e.critique_link %}
       <div class="prompt">
-        <div class="muted small">Crítica que você gostou (opcional)</div>
-        <input class="input" name="critique_link" placeholder="Link de vídeo, texto ou podcast">
+        <strong>Referência salva:</strong>
+        <p style="margin-top: 5px;">
+          <a href="{{ e.critique_link }}" target="_blank" style="text-decoration: underline; color: var(--accent);">
+            Acessar link externo ↗
+          </a>
+        </p>
       </div>
+      {% endif %}
+
     </div>
+  {% endif %}
 
-    <div class="row">
-      <button class="btn primary" type="submit">Guardar</button>
-      <a class="btn secondary" href="{{ url_for('index') }}">Voltar</a>
-    </div>
-  </form>
+  <div class="section-actions" style="margin-top: 50px; border-top: 1px solid var(--border); padding-top: 20px;">
+    
+    <a href="{{ url_for('edit_entry', entry_id=e.id) }}" class="btn primary">
+      Editar filme
+    </a>
+
+    <a href="{{ url_for('index') }}" class="btn secondary">Voltar</a>
+
+    <form action="{{ url_for('delete_entry', entry_id=e.id) }}" method="post" 
+          style="display:inline-block; margin-left: auto;"
+          onsubmit="return confirm('Tem certeza que quer esquecer esse filme?');">
+      <button type="submit" class="btn danger" style="border:none; padding: 10px;">
+        Excluir
+      </button>
+    </form>
+    
+  </div>
+</div>
+
 {% endblock %}
