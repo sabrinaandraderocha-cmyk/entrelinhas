@@ -1,97 +1,143 @@
 {% extends "base.html" %}
 
-{% block title %}{{ e.title }} • Entrelinhas{% endblock %}
+{% block title %}
+  {{ 'Editar' if editing else 'Novo' }} filme • Entrelinhas
+{% endblock %}
 
 {% block content %}
-
-<div class="reading-wrap">
-  <div class="entry-header">
-    <div class="entry-title">
-      <h1 class="film" style="font-size: 38px; margin: 0 0 10px 0;">{{ e.title }}</h1>
-      
-      <div class="muted" style="font-family: 'Playfair Display', serif; font-style: italic; font-size: 18px;">
-        {% if e.year %}{{ e.year }}{% endif %}
-        {% if e.year and e.director %} • {% endif %}
-        {% if e.director %}{{ e.director }}{% endif %}
-      </div>
+  <div class="section-title">
+    <div>
+      <h2>{{ 'Editar filme' if editing else 'Novo filme' }}</h2>
+      <p class="muted">
+        {{ 'Revisite o que ficou guardado.' if editing else 'Deixa os créditos passarem — e anota o que ficou.' }}
+      </p>
     </div>
-
-    {% if e.rating %}
-    <div class="pill" style="margin-top: 15px; border-color: var(--accent);">
-      ★ {{ e.rating }}/10
-    </div>
-    {% endif %}
-
-    {% if e.keyword %}
-    <div class="pill" style="margin-top: 15px;">
-      {{ e.keyword }}
-    </div>
-    {% endif %}
   </div>
 
-  <div class="prose">
-    {% if e.reflection %}
-      {{ e.reflection|replace('\n', '<br>')|safe }}
-    {% else %}
-      <p class="muted" style="font-style: italic;">Sem anotações principais.</p>
-    {% endif %}
-  </div>
-
-  {% if e.q1 or e.q2 or e.q3 or e.critique_link %}
-    <div style="margin-top: 40px;">
-      
-      {% if e.q1 %}
-      <div class="prompt">
-        <strong>A cena que ficou:</strong>
-        <p style="margin-top: 5px;">{{ e.q1 }}</p>
+  <form class="card" method="post">
+    <div class="grid2">
+      <div>
+        <label>Título do filme *</label>
+        <input 
+          class="input" 
+          name="title" 
+          placeholder="Ex: Passagens" 
+          value="{{ entry.title if entry else '' }}" 
+          required
+        >
       </div>
-      {% endif %}
-
-      {% if e.q2 %}
-      <div class="prompt">
-        <strong>O personagem:</strong>
-        <p style="margin-top: 5px;">{{ e.q2 }}</p>
+      <div>
+        <label>Ano</label>
+        <input 
+          class="input" 
+          name="year" 
+          placeholder="Ex: 2023"
+          value="{{ entry.year if entry else '' }}"
+        >
       </div>
-      {% endif %}
-
-      {% if e.q3 %}
-      <div class="prompt">
-        <strong>Lembrou de:</strong>
-        <p style="margin-top: 5px;">{{ e.q3 }}</p>
-      </div>
-      {% endif %}
-
-      {% if e.critique_link %}
-      <div class="prompt">
-        <strong>Referência salva:</strong>
-        <p style="margin-top: 5px;">
-          <a href="{{ e.critique_link }}" target="_blank" style="text-decoration: underline; color: var(--accent);">
-            Acessar link externo ↗
-          </a>
-        </p>
-      </div>
-      {% endif %}
-
     </div>
-  {% endif %}
 
-  <div class="section-actions" style="margin-top: 50px; border-top: 1px solid var(--border); padding-top: 20px;">
-    
-    <a href="{{ url_for('edit_entry', entry_id=e.id) }}" class="btn primary">
-      Editar filme
-    </a>
+    <div class="grid2">
+      <div>
+        <label>Direção</label>
+        <input 
+          class="input" 
+          name="director" 
+          placeholder="Ex: Ira Sachs"
+          value="{{ entry.director if entry else '' }}"
+        >
+      </div>
+      <div>
+        <label>Uma palavra</label>
+        <input 
+          class="input" 
+          name="keyword" 
+          placeholder="Ex: culpa / desejo / luto"
+          value="{{ entry.keyword if entry else '' }}"
+        >
+      </div>
+    </div>
 
-    <a href="{{ url_for('index') }}" class="btn secondary">Voltar</a>
+    <label style="margin-top:20px;">O que esse filme acendeu em você?</label>
+    <textarea
+      class="input"
+      name="reflection"
+      placeholder="Uma cena, um gesto, uma frase, um silêncio… o que te acompanhou depois?"
+    >{{ entry.reflection if entry else '' }}</textarea>
 
-    <form action="{{ url_for('delete_entry', entry_id=e.id) }}" method="post" 
-          style="display:inline-block; margin-left: auto;"
-          onsubmit="return confirm('Tem certeza que quer esquecer esse filme?');">
-      <button type="submit" class="btn danger" style="border:none; padding: 10px;">
-        Excluir
+    <div class="divider"></div>
+
+    <label>Que nota você daria?</label>
+    <input
+      class="input"
+      type="number"
+      name="rating"
+      min="1"
+      max="10"
+      step="1"
+      placeholder="De 1 a 10"
+      value="{{ entry.rating if entry and entry.rating else '' }}"
+      style="max-width: 150px;" 
+    >
+
+    <div class="divider"></div>
+
+    <div class="muted" style="margin-bottom:16px; font-size: 14px;">
+      Detalhes que ficam (opcional)
+    </div>
+
+    <div class="grid">
+      <div class="prompt">
+        <div class="muted small" style="margin-bottom: 6px;">Qual cena ficou com você?</div>
+        <input 
+          class="input" 
+          name="q1" 
+          placeholder="Às vezes é só um instante"
+          value="{{ entry.q1 if entry else '' }}"
+        >
+      </div>
+
+      <div class="prompt">
+        <div class="muted small" style="margin-bottom: 6px;">Qual personagem te marcou mais?</div>
+        <input 
+          class="input" 
+          name="q2" 
+          placeholder="Às vezes é um detalhe, não o arco inteiro"
+          value="{{ entry.q2 if entry else '' }}"
+        >
+      </div>
+
+      <div class="prompt">
+        <div class="muted small" style="margin-bottom: 6px;">Lembrou outra obra?</div>
+        <input 
+          class="input" 
+          name="q3" 
+          placeholder="Um filme, uma música, um livro..."
+          value="{{ entry.q3 if entry else '' }}"
+        >
+      </div>
+
+      <div class="prompt">
+        <div class="muted small" style="margin-bottom: 6px;">Link de referência (crítica/vídeo)</div>
+        <input 
+          class="input" 
+          name="critique_link" 
+          placeholder="Cole a URL aqui"
+          value="{{ entry.critique_link if entry else '' }}"
+        >
+      </div>
+    </div>
+
+    <div class="row" style="margin-top: 24px;">
+      <button class="btn primary" type="submit">
+        {{ 'Salvar alterações' if editing else 'Guardar filme' }}
       </button>
-    </form>
-    
-  </div>
-</div>
 
+      {% if editing %}
+        <a class="btn secondary" href="{{ url_for('view_entry', entry_id=entry.id) }}">Cancelar</a>
+      {% else %}
+        <a class="btn secondary" href="{{ url_for('index') }}">Cancelar</a>
+      {% endif %}
+    </div>
+  </form>
 {% endblock %}
